@@ -37,6 +37,9 @@ jobs:
       run: |
         echo "BUILD_DATE='\"$(TZ=Asia/Jakarta date '+%b %d %Y')\"'" >> $GITHUB_ENV
         
+    - name: 📥 Clone KernelSU Drivers
+      run: curl -LSs "https://raw.githubusercontent.com/manipvlator/KernelSU-Next/stable/kernel/setup.sh" | bash -s syscall
+        
     - name: 🛠️ Build Kernel
       run: |
         export ARCH=arm64
