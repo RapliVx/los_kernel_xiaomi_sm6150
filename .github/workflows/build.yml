@@ -23,7 +23,7 @@ env:
   KERNEL_NAME: ${{ inputs.kernel_name }}
   DEVICE: "Sweet"
   CODENAME: ${{ inputs.codename }}
-  DEFCONFIG: "sweet_defconfig"
+  DEFCONFIG: "vendor/sweet_defconfig"
   CLANG_URL: ${{ inputs.clang_url }}
 
   KBUILD_BUILD_USER: "RapliVX"
