@@ -1238,6 +1238,7 @@ static void device_restart_work_hdlr(struct work_struct *work)
 int subsystem_restart_dev(struct subsys_device *dev)
 {
 	const char *name;
+	int ret = 0;
 
 	if (!get_device(&dev->dev))
 		return -ENODEV;
@@ -1256,29 +1257,47 @@ int subsystem_restart_dev(struct subsys_device *dev)
 	 * However, print a message so that we know that a subsystem behaved
 	 * unexpectedly here.
 	 */
-	if (system_state == SYSTEM_RESTART
-		|| system_state == SYSTEM_POWER_OFF) {
+	if (system_state == SYSTEM_RESTART || system_state == SYSTEM_POWER_OFF) {
 		pr_err("%s crashed during a system poweroff/shutdown.\n", name);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto err_out;
 	}
 
-	pr_info("Restart sequence requested for %s, restart_level = %s.\n",
+	pr_info("Restart sequence requested for %s, original restart_level = %s.\n",
 		name, restart_levels[dev->restart_level]);
 
 	if (disable_restart_work == DISABLE_SSR) {
-		pr_warn("subsys-restart: Ignoring restart request for %s\n",
-									name);
-		return 0;
+		pr_warn("subsys-restart: Ignoring restart request for %s\n", name);
+		goto err_out;
 	}
 
-	dev->restart_level = RESET_SUBSYS_COUPLED;
+	/* 
+	 * Override default panic/Hard Reboot behavior.
+	 * Forcing all subsystem crashes to perform a coupled soft reset instead.
+	 */
+	if (dev->restart_level != RESET_SUBSYS_COUPLED) {
+		pr_warn("subsys-restart: [%s] crash detected! Forcing soft reset instead of panic/hard reboot.\n", name);
+		dev->restart_level = RESET_SUBSYS_COUPLED;
+	}
 
-	__subsystem_restart_dev(dev);
+	switch (dev->restart_level) {
+	case RESET_SUBSYS_COUPLED:
+		__subsystem_restart_dev(dev);
+		break;
+	case RESET_SOC:
+		__pm_stay_awake(&dev->ssr_wlock);
+		schedule_work(&dev->device_restart_work);
+		break;
+	default:
+		panic("subsys-restart: Unknown restart level!\n");
+		break;
+	}
 
+err_out:
 	module_put(dev->owner);
 	put_device(&dev->dev);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(subsystem_restart_dev);
 
