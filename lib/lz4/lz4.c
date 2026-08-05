@@ -114,6 +114,8 @@
 #define LZ4_STATIC_LINKING_ONLY
 #endif
 #include "lz4.h"
+#include <linux/slab.h>
+#include <linux/mm.h>
 /* see also "memory routines" below */
 
 /*-************************************
