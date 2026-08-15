@@ -2181,3 +2181,11 @@ config LRU_GEN_FRANXX
 	  total available RAM at boot (6GB/8GB scaling).
 
 endmenu
+
+config SCHED_EVA
+	bool "Enhanced Visual-render Affinity (E.V.A)"
+	default y
+	help
+	  E.V.A optimizes game rendering threads by aggressively pinning them
+	  to big/prime cores and applying optimal nice values, overriding the
+	  CFS scheduler. Activated on-demand via sysctl.
