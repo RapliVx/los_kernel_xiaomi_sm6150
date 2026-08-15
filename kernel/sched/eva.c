@@ -441,7 +441,7 @@ static void eva_smart_work_fn(struct work_struct *work)
 		bool minimized = false;
 		rcu_read_lock();
 		t = find_task_by_pid_ns(pid, &init_pid_ns);
-		if (t && !cpumask_intersects(tsk_cpus_allowed(t), &allowed_mask))
+		if (t && !cpumask_intersects(&eva_cpus_allowed(t), &allowed_mask))
 			minimized = true;
 		rcu_read_unlock();
 
@@ -549,7 +549,7 @@ static void eva_auto_detect_work_fn(struct work_struct *work)
 		if (!p->mm || from_kuid(&init_user_ns, task_uid(p)) < 10000)
 			continue;
 
-		if (!cpumask_intersects(tsk_cpus_allowed(p), &allowed_mask))
+		if (!cpumask_intersects(&eva_cpus_allowed(p), &allowed_mask))
 			continue;
 
 		for_each_thread(p, t) {
