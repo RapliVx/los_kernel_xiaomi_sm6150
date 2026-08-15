@@ -2157,3 +2157,35 @@ config SCHED_HYDRA
 	  HYDRA optimizes game rendering threads by applying nice boosts and
 	  big-core affinity. It is activated on-demand via sysctl and operates
 	  entirely isolated from the core scheduler.
+
+menu "Franxx Performance Architecture"
+
+config SCHED_FRANXX_CORE_AFFINITY
+	bool "Franxx: Dynamic EAS/BORE Core Affinity"
+	default y
+	help
+	  Dynamically traps SurfaceFlinger and Game engines to Gold cores,
+	  while strictly confining background sync tasks to Silver cores.
+
+config CPU_FREQ_GOV_SCHEDUTIL_FRANXX
+	bool "Franxx: Schedutil Atomic Rate Limiting"
+	default y
+	help
+	  Dynamically manipulates WALT up/down transition limits based on
+	  cluster topology and CPU load for absolute 120Hz smoothness.
+
+config MSM_FRANXX_HAL_BYPASS
+	bool "Franxx: Legacy Qualcomm HAL Bypass"
+	default y
+	help
+	  Provides anti-panic stubs for legacy Android HALs to prevent 
+	  userspace panics and battery drains when overriding stock boosts.
+
+config LRU_GEN_FRANXX
+	bool "Franxx: Dynamic MGLRU Scaling"
+	default y
+	help
+	  Dynamically scales swappiness and MGLRU min_ttl based on 
+	  total available RAM at boot (6GB/8GB scaling).
+
+endmenu

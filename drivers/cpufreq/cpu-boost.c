@@ -192,6 +192,10 @@ static void do_input_boost(struct work_struct *work)
 	unsigned int i, ret;
 	struct cpu_sync *i_sync_info;
 
+#ifdef CONFIG_MSM_FRANXX_HAL_BYPASS
+	return;
+#endif
+
 	cancel_delayed_work_sync(&input_boost_rem);
 	if (sched_boost_active) {
 		sched_set_boost(0);

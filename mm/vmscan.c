@@ -6810,3 +6810,27 @@ void check_move_unevictable_pages(struct page **pages, int nr_pages)
 	}
 }
 #endif /* CONFIG_SHMEM */
+
+#ifdef CONFIG_LRU_GEN_FRANXX
+extern unsigned long lru_gen_min_ttl;
+
+static int __init lru_gen_franxx_init(void)
+{
+	unsigned long total_ram = totalram_pages;
+	
+	/* Safety: Prevent division by zero or unitialized RAM states */
+	if (unlikely(total_ram == 0)) return -EINVAL;
+
+	/* Adapt swappiness based on hardware capability */
+	if (total_ram > (4UL << (30 - PAGE_SHIFT))) {
+		vm_swappiness = 180;
+		WRITE_ONCE(lru_gen_min_ttl, msecs_to_jiffies(1500));
+	} else {
+		vm_swappiness = 130;
+		WRITE_ONCE(lru_gen_min_ttl, msecs_to_jiffies(500));
+	}
+	pr_info("Franxx Opt: Dynamic MGLRU Scaling Initialized (Swappiness: %d, TTL: %u ms)\n", vm_swappiness, jiffies_to_msecs(READ_ONCE(lru_gen_min_ttl)));
+	return 0;
+}
+late_initcall(lru_gen_franxx_init);
+#endif

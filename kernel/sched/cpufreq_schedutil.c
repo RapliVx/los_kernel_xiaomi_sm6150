@@ -408,6 +408,37 @@ static void sugov_walt_adjust(struct sugov_cpu *sg_cpu, unsigned long *util,
 		*util = max(*util, sg_cpu->walt_load.pl);
 }
 
+#ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL_FRANXX
+static inline void sugov_franxx_tune(struct sugov_policy *sg_policy, unsigned long util)
+{
+	struct sugov_tunables *tunables;
+	unsigned long max;
+	bool is_big;
+
+	/* Anti-Panic NULL Check */
+	if (unlikely(!sg_policy || !sg_policy->tunables || !sg_policy->policy))
+		return;
+
+	tunables = sg_policy->tunables;
+	max = READ_ONCE(sg_policy->policy->cpuinfo.max_freq);
+	is_big = (sg_policy->policy->cpu >= 6);
+
+	if (unlikely(max == 0)) return;
+
+	if (util > (max * 75 / 100)) {
+		/* Gaming/120Hz: Instant up, graceful 4000us down */
+		WRITE_ONCE(tunables->up_rate_limit_us, is_big ? 500 : 1000);
+		WRITE_ONCE(tunables->down_rate_limit_us, 4000);
+	} else {
+		/* Screen-off / Idle fallback */
+		WRITE_ONCE(tunables->up_rate_limit_us, 3000);
+		WRITE_ONCE(tunables->down_rate_limit_us, 2000);
+	}
+	sg_policy->up_rate_delay_ns = tunables->up_rate_limit_us * NSEC_PER_USEC;
+	sg_policy->down_rate_delay_ns = tunables->down_rate_limit_us * NSEC_PER_USEC;
+}
+#endif
+
 static void sugov_update_single(struct update_util_data *hook, u64 time,
 				unsigned int flags)
 {
@@ -458,6 +489,9 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 
 		sugov_iowait_boost(sg_cpu, &util, &max);
 		sugov_walt_adjust(sg_cpu, &util, &max);
+#ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL_FRANXX
+		sugov_franxx_tune(sg_policy, util);
+#endif
 		next_f = get_next_freq(sg_policy, util, max);
 		/*
 		 * Do not reduce the frequency if the CPU has not been idle
@@ -524,6 +558,9 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 		sugov_walt_adjust(j_sg_cpu, &util, &max);
 	}
 
+#ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL_FRANXX
+	sugov_franxx_tune(sg_policy, util);
+#endif
 	return get_next_freq(sg_policy, util, max);
 }
 
@@ -992,6 +1029,9 @@ static int sugov_init(struct cpufreq_policy *policy)
 		goto fail;
 
 out:
+#ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL_FRANXX
+	pr_info("Franxx Opt: Schedutil Atomic Rate Limiting Initialized for CPU%d\n", policy->cpu);
+#endif
 	mutex_unlock(&global_tunables_lock);
 	return 0;
 

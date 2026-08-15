@@ -55,6 +55,9 @@ static unsigned int aggr_top_load;
 /*******************************sysfs start************************************/
 static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
 {
+#ifdef CONFIG_MSM_FRANXX_HAL_BYPASS
+	return 0;
+#endif
 	int i, j, ntokens = 0;
 	unsigned int val, cpu;
 	const char *cp = buf;
@@ -131,6 +134,9 @@ module_param_cb(cpu_min_freq, &param_ops_cpu_min_freq, NULL, 0644);
 
 static int set_cpu_max_freq(const char *buf, const struct kernel_param *kp)
 {
+#ifdef CONFIG_MSM_FRANXX_HAL_BYPASS
+	return 0;
+#endif
 	int i, j, ntokens = 0;
 	unsigned int val, cpu;
 	const char *cp = buf;
@@ -450,6 +456,10 @@ static int __init msm_performance_init(void)
 	int rc;
 
 	cpufreq_register_notifier(&perf_cpufreq_nb, CPUFREQ_POLICY_NOTIFIER);
+
+#ifdef CONFIG_MSM_FRANXX_HAL_BYPASS
+	pr_info("Franxx Opt: Legacy Qualcomm HAL Bypass Enabled\n");
+#endif
 
 	for_each_present_cpu(cpu)
 		per_cpu(cpu_stats, cpu).max = UINT_MAX;

@@ -8349,6 +8349,44 @@ static inline struct cpumask *find_rtg_target(struct task_struct *p)
  * sd is a pointer to the sched domain we wish to use for an
  * energy-aware placement option.
  */
+#ifdef CONFIG_SCHED_FRANXX_CORE_AFFINITY
+/* 
+ * Franxx: Bulletproof Adaptive Placement Heuristic
+ * Caller must hold rcu_read_lock().
+ */
+static int sched_franxx_energy_placement(struct task_struct *p, int prev_cpu, int eas_target)
+{
+	int target = eas_target;
+	u64 burst;
+	
+	/* Safety: Prevent NULL pointer deref and ensure task is valid */
+	if (unlikely(!p)) return eas_target;
+
+	burst = READ_ONCE(p->se.burst_time);
+
+	/* Gaming Mode: Low burst time implies heavy UI/Game interactive loop */
+	if (burst > 0 && burst < (12U << 20)) {
+		if (cpu_online(6) && cpu_rq(6)->cfs.h_nr_running < 2 && cpumask_test_cpu(6, tsk_cpus_allowed(p)))
+			target = 6;
+		else if (cpu_online(7) && cpu_rq(7)->cfs.h_nr_running < 2 && cpumask_test_cpu(7, tsk_cpus_allowed(p)))
+			target = 7;
+	} 
+	/* Daily Mode: Heavy sync task. Restrict to Silver cores (0-5) */
+	else if (burst > (22U << 22) && prev_cpu >= 6) {
+		int fallback = cpumask_any_and(tsk_cpus_allowed(p), cpu_coregroup_mask(0));
+		/* Failsafe: Only migrate if Silver cores aren't 100% saturated */
+		if (fallback < 6 && cpu_online(fallback) && cpu_rq(fallback)->cfs.h_nr_running < 5)
+			target = fallback;
+	}
+
+	/* Final bounds check against kernel panic */
+	if (unlikely(target >= nr_cpu_ids || !cpu_online(target)))
+		return eas_target;
+		
+	return target;
+}
+#endif
+
 static int find_energy_efficient_cpu(struct sched_domain *sd,
 				     struct task_struct *p,
 				     int cpu, int prev_cpu,
@@ -8493,6 +8531,11 @@ out:
 			need_idle, fbt_env.fastpath, placement_boost,
 			rtg_target ? cpumask_first(rtg_target) : -1, start_t,
 			boosted);
+#ifdef CONFIG_SCHED_FRANXX_CORE_AFFINITY
+	/* Evaluate Franxx Opt heuristic over EAS target */
+	target_cpu = sched_franxx_energy_placement(p, prev_cpu, target_cpu);
+#endif
+
 	return target_cpu;
 }
 
@@ -13392,6 +13435,15 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 		raw_spin_unlock(&migration_lock);
 	}
 }
+
+#ifdef CONFIG_SCHED_FRANXX_CORE_AFFINITY
+static int __init franxx_sched_init_log(void)
+{
+	pr_info("Franxx Opt: Dynamic EAS/BORE Core Affinity Enabled\n");
+	return 0;
+}
+late_initcall(franxx_sched_init_log);
+#endif
 
 #endif /* bye walt */
 
