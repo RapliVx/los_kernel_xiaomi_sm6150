@@ -502,7 +502,7 @@ static void do_epoch_check(struct subsys_device *dev)
 	if (time_first && n >= max_restarts_check) {
 		if ((curr_time->tv_sec - time_first->tv_sec) <
 				max_history_time_check)
-			panic("Subsystems have crashed %d times in less than %ld seconds!",
+			pr_err("Subsystems have crashed %d times in less than %ld seconds!\n",
 				max_restarts_check, max_history_time_check);
 	}
 
@@ -762,13 +762,9 @@ static int subsystem_shutdown(struct subsys_device *dev, void *data)
 			current->comm, current->pid, name);
 	ret = dev->desc->shutdown(dev->desc, true);
 	if (ret < 0) {
-		if (!dev->desc->ignore_ssr_failure) {
-			panic("subsys-restart: [%s:%d]: Failed to shutdown %s!",
-				current->comm, current->pid, name);
-		} else {
-			pr_err("Shutdown failure on %s\n", name);
-			return ret;
-		}
+		pr_err("subsys-restart: [%s:%d]: Failed to shutdown %s!\n",
+			current->comm, current->pid, name);
+		return ret;
 	}
 	dev->crash_count++;
 	subsys_set_state(dev, SUBSYS_OFFLINE);
@@ -813,11 +809,9 @@ static int subsystem_powerup(struct subsys_device *dev, void *data)
 			|| system_state == SYSTEM_POWER_OFF)
 			WARN(1, "SSR aborted: %s, system reboot/shutdown is under way\n",
 				name);
-		else if (!dev->desc->ignore_ssr_failure)
-			panic("[%s:%d]: Powerup error: %s!",
-				current->comm, current->pid, name);
 		else
-			pr_err("Powerup failure on %s\n", name);
+			pr_err("[%s:%d]: Powerup error: %s!\n",
+				current->comm, current->pid, name);
 		return ret;
 	}
 
@@ -825,11 +819,9 @@ static int subsystem_powerup(struct subsys_device *dev, void *data)
 	if (ret) {
 		notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
 								NULL);
-		if (!dev->desc->ignore_ssr_failure)
-			panic("[%s:%d]: Timed out waiting for error ready: %s!",
-				current->comm, current->pid, name);
-		else
-			return ret;
+		pr_err("[%s:%d]: Timed out waiting for error ready: %s!\n",
+			current->comm, current->pid, name);
+		return ret;
 	}
 	subsys_set_state(dev, SUBSYS_ONLINE);
 	subsys_set_crash_status(dev, CRASH_STATUS_NO_CRASH);
@@ -1212,7 +1204,7 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 			__pm_stay_awake(&dev->ssr_wlock);
 			queue_work(ssr_wq, &dev->work);
 		} else {
-			panic("Subsystem %s crashed during SSR!", name);
+			pr_err("Subsystem %s crashed during SSR!\n", name);
 		}
 	} else
 		WARN(dev->track.state == SUBSYS_OFFLINE,
@@ -1231,7 +1223,7 @@ static void device_restart_work_hdlr(struct work_struct *work)
 	 * sync() and fclose() on attempting the dump.
 	 */
 	msleep(100);
-	panic("subsys-restart: Resetting the SoC - %s crashed.",
+	pr_err("subsys-restart: Resetting the SoC - %s crashed.\n",
 							dev->desc->name);
 }
 
@@ -1289,7 +1281,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		schedule_work(&dev->device_restart_work);
 		break;
 	default:
-		panic("subsys-restart: Unknown restart level!\n");
+		pr_err("subsys-restart: Unknown restart level!\n");
 		break;
 	}
 
