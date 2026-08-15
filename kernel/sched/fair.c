@@ -8366,14 +8366,14 @@ static int sched_franxx_energy_placement(struct task_struct *p, int prev_cpu, in
 
 	/* Gaming Mode: Low burst time implies heavy UI/Game interactive loop */
 	if (burst > 0 && burst < (12U << 20)) {
-		if (cpu_online(6) && cpu_rq(6)->cfs.h_nr_running < 2 && cpumask_test_cpu(6, tsk_cpus_allowed(p)))
+		if (cpu_online(6) && cpu_rq(6)->cfs.h_nr_running < 2 && cpumask_test_cpu(6, &p->cpus_allowed))
 			target = 6;
-		else if (cpu_online(7) && cpu_rq(7)->cfs.h_nr_running < 2 && cpumask_test_cpu(7, tsk_cpus_allowed(p)))
+		else if (cpu_online(7) && cpu_rq(7)->cfs.h_nr_running < 2 && cpumask_test_cpu(7, &p->cpus_allowed))
 			target = 7;
 	} 
 	/* Daily Mode: Heavy sync task. Restrict to Silver cores (0-5) */
 	else if (burst > (22U << 22) && prev_cpu >= 6) {
-		int fallback = cpumask_any_and(tsk_cpus_allowed(p), cpu_coregroup_mask(0));
+		int fallback = cpumask_any_and(&p->cpus_allowed, cpu_coregroup_mask(0));
 		/* Failsafe: Only migrate if Silver cores aren't 100% saturated */
 		if (fallback < 6 && cpu_online(fallback) && cpu_rq(fallback)->cfs.h_nr_running < 5)
 			target = fallback;
@@ -8531,6 +8531,7 @@ out:
 			need_idle, fbt_env.fastpath, placement_boost,
 			rtg_target ? cpumask_first(rtg_target) : -1, start_t,
 			boosted);
+
 #ifdef CONFIG_SCHED_FRANXX_CORE_AFFINITY
 	/* Evaluate Franxx Opt heuristic over EAS target */
 	target_cpu = sched_franxx_energy_placement(p, prev_cpu, target_cpu);
