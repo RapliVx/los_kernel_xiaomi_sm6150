@@ -12,7 +12,7 @@
 #define SCHED_EVA_VERSION  "1.0"
 
 #define EVA_MAX_CLUSTERS 4
-#define EVA_MAX_TRACKED_THREADS 64
+#define EVA_MAX_TRACKED_THREADS 256
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 #define eva_cpus_allowed(t) ((t)->cpus_mask)
@@ -53,5 +53,6 @@ extern int sched_eva_light_util;
 extern int sched_eva_cluster_depth;
 extern int sched_eva_uclamp_min;
 extern char sched_eva_thread_patterns[256];
+extern int sched_eva_poll_ms;
 
 #endif /* _LINUX_SCHED_EVA_H */

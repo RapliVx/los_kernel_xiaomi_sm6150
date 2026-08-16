@@ -43,6 +43,7 @@ int sched_eva_heavy_util = 300;
 int sched_eva_light_util = 100;
 int sched_eva_cluster_depth = 0;
 int sched_eva_uclamp_min = 0;
+int sched_eva_poll_ms = 16;
 char sched_eva_thread_patterns[256] = "";
 
 /* ======================== Internal state ================================= */
@@ -88,7 +89,15 @@ static void stop_smart_worker(void)
 
 static unsigned long eva_get_cpu_capacity(int cpu)
 {
-	return capacity_orig_of(cpu);
+	unsigned long cap = 0;
+
+#ifdef CONFIG_CPU_FREQ
+	cap = cpufreq_quick_get_max(cpu);
+#endif
+	if (!cap)
+		cap = capacity_orig_of(cpu);
+
+	return cap;
 }
 
 struct eva_tier {
@@ -490,7 +499,7 @@ static void eva_smart_work_fn(struct work_struct *work)
 end:
 	if (eva_smart_running)
 		schedule_delayed_work(&eva_smart_dwork,
-				      msecs_to_jiffies(500));
+				      msecs_to_jiffies(sched_eva_poll_ms));
 }
 
 
@@ -687,6 +696,13 @@ static struct ctl_table sched_eva_sysctls[] = {
 		.maxlen		= 256,
 		.mode		= 0644,
 		.proc_handler	= proc_dostring,
+	},
+	{
+		.procname	= "sched_eva_poll_ms",
+		.data		= &sched_eva_poll_ms,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
 	},
 	{}
 };
