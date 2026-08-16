@@ -36,7 +36,6 @@ int __read_mostly sched_eva_enable = 1;
 DEFINE_STATIC_KEY_TRUE(sched_eva_enable_key);
 
 int sched_eva_pid;
-int sched_eva_auto_detect = 1; /* 1: Auto-Detect Game PIDs */
 int sched_eva_nice = -10;
 int sched_eva_smart_mode = 2; /* 0: Off, 1: Hard Pin, 2: Smart Logic */
 int sched_eva_throttle_freq = 1400000;
@@ -65,7 +64,6 @@ static struct work_struct eva_exit_work;
 static atomic_t eva_exit_pid = ATOMIC_INIT(0);
 
 static struct delayed_work eva_smart_dwork;
-static struct delayed_work eva_auto_detect_dwork;
 static bool eva_smart_running;
 
 /* ======================== Smart worker lifecycle ========================= */
@@ -436,23 +434,6 @@ static void eva_smart_work_fn(struct work_struct *work)
 	if (big_core_freq > 0 && big_core_freq < sched_eva_throttle_freq)
 		is_throttled = true;
 
-	/* Auto-revert if game is minimized (stripped of big core access by Android cgroups) */
-	if (sched_eva_auto_detect) {
-		bool minimized = false;
-		rcu_read_lock();
-		t = find_task_by_pid_ns(pid, &init_pid_ns);
-		if (t && !cpumask_intersects(&eva_cpus_allowed(t), &allowed_mask))
-			minimized = true;
-		rcu_read_unlock();
-
-		if (minimized) {
-			pr_info("eva: game %d minimized, auto-reverting\n", pid);
-			eva_revert_all_threads(true, pid);
-			cmpxchg(&sched_eva_pid, pid, 0);
-			goto end;
-		}
-	}
-
 	mutex_lock(&eva_mutex);
 	for (i = 0; i < eva_thread_count; i++) {
 		struct eva_thread_state *state = &eva_threads[i];
@@ -512,67 +493,7 @@ end:
 				      msecs_to_jiffies(500));
 }
 
-/* ======================== Auto-Detect Worker ============================= */
 
-static void eva_auto_detect_work_fn(struct work_struct *work)
-{
-	struct task_struct *p, *t;
-	int found_pid = 0;
-	int i, start, effective_depth;
-	cpumask_t allowed_mask;
-
-	char matched_name[TASK_COMM_LEN] = "";
-
-	if (!sched_eva_auto_detect || READ_ONCE(sched_eva_pid) > 0 ||
-	    !static_branch_likely(&sched_eva_enable_key))
-		goto out;
-
-	if (unlikely(eva_cluster_count == 0))
-		eva_detect_clusters();
-
-	mutex_lock(&eva_topo_mutex);
-	cpumask_clear(&allowed_mask);
-	effective_depth = (sched_eva_cluster_depth == 0)
-		? max(1, eva_cluster_count - 1)
-		: sched_eva_cluster_depth;
-	start = max(0, eva_cluster_count - effective_depth);
-	for (i = start; i < eva_cluster_count; i++)
-		cpumask_or(&allowed_mask, &allowed_mask, &eva_clusters[i]);
-	cpumask_and(&allowed_mask, &allowed_mask, cpu_online_mask);
-	mutex_unlock(&eva_topo_mutex);
-
-	if (cpumask_empty(&allowed_mask))
-		goto out;
-
-	rcu_read_lock();
-	for_each_process(p) {
-		if (!p->mm || from_kuid(&init_user_ns, task_uid(p)) < 10000)
-			continue;
-
-		if (!cpumask_intersects(&eva_cpus_allowed(p), &allowed_mask))
-			continue;
-
-		for_each_thread(p, t) {
-			if (eva_match_thread(t)) {
-				found_pid = p->tgid;
-				strlcpy(matched_name, t->comm, TASK_COMM_LEN);
-				break;
-			}
-		}
-		if (found_pid)
-			break;
-	}
-	rcu_read_unlock();
-
-	if (found_pid) {
-		pr_info("eva: Auto-detected foreground game PID %d (Trigger: %s)\n", found_pid, matched_name);
-		cmpxchg(&sched_eva_pid, 0, found_pid);
-		eva_optimize_threads(found_pid);
-	}
-
-out:
-	schedule_delayed_work(&eva_auto_detect_dwork, msecs_to_jiffies(2000));
-}
 
 /* ======================== Tracepoint work handlers ======================= */
 
@@ -703,13 +624,7 @@ static struct ctl_table sched_eva_sysctls[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_eva_enable_handler,
 	},
-	{
-		.procname	= "sched_eva_auto_detect",
-		.data		= &sched_eva_auto_detect,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
-	},
+
 	{
 		.procname	= "sched_eva_pid",
 		.data		= &sched_eva_pid,
@@ -786,9 +701,7 @@ static int __init sched_eva_init(void)
 	INIT_WORK(&eva_fork_work, eva_fork_work_fn);
 	INIT_WORK(&eva_exit_work, eva_exit_work_fn);
 	INIT_DELAYED_WORK(&eva_smart_dwork, eva_smart_work_fn);
-	INIT_DELAYED_WORK(&eva_auto_detect_dwork, eva_auto_detect_work_fn);
 
-	schedule_delayed_work(&eva_auto_detect_dwork, msecs_to_jiffies(2000));
 
 	ret = register_trace_sched_process_fork(probe_sched_process_fork, NULL);
 	if (ret)
