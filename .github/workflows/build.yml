@@ -137,6 +137,11 @@ jobs:
         run: |
           sed -i '/CONFIG_KSU/d' arch/arm64/configs/${{ env.DEFCONFIG }}
 
+      - name: "[MOD] :: EVA_INTEGRATION"
+        run: |
+          echo "INITIATING E.V.A PROTOCOL ..."
+          curl -LSs "https://raw.githubusercontent.com/RapliVx/E.V.A/main/kernel/setup.sh" | bash -s main
+
       - name: "[PATCH] :: MIUI_OPTIMIZATION"
         if: matrix.patch_miui == true
         run: |
